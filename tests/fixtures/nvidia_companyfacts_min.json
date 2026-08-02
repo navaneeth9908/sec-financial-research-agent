@@ -1,0 +1,178 @@
+{
+  "cik": 1045810,
+  "entityName": "NVIDIA CORP",
+  "fixtureProvenance": {
+    "source": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json",
+    "description": "Compact SEC-derived fixture containing selected annual 10-K facts."
+  },
+  "facts": {
+    "us-gaap": {
+      "RevenueFromContractWithCustomerExcludingAssessedTax": {
+        "label": "Revenue from Contract with Customer, Excluding Assessed Tax",
+        "units": {
+          "USD": [
+            {
+              "start": "2020-01-27",
+              "end": "2021-01-31",
+              "val": 16675000000,
+              "accn": "0001045810-22-000036",
+              "fy": 2022,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2022-03-18",
+              "frame": "CY2020"
+            },
+            {
+              "start": "2021-02-01",
+              "end": "2022-01-30",
+              "val": 26914000000,
+              "accn": "0001045810-22-000036",
+              "fy": 2022,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2022-03-18",
+              "frame": "CY2021"
+            }
+          ]
+        }
+      },
+      "Revenues": {
+        "label": "Revenues",
+        "units": {
+          "USD": [
+            {
+              "start": "2024-01-29",
+              "end": "2025-01-26",
+              "val": 130497000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2024"
+            },
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 215938000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "Net Income (Loss) Attributable to Parent",
+        "units": {
+          "USD": [
+            {
+              "start": "2024-01-29",
+              "end": "2025-01-26",
+              "val": 72880000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            },
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 120067000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "Assets",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-01-26",
+              "val": 111601000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2024Q4I"
+            },
+            {
+              "end": "2026-01-25",
+              "val": 206803000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "Liabilities": {
+        "label": "Liabilities",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-01-26",
+              "val": 32274000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2024Q4I"
+            },
+            {
+              "end": "2026-01-25",
+              "val": 49510000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25"
+            }
+          ]
+        }
+      },
+      "NetCashProvidedByUsedInOperatingActivities": {
+        "label": "Net Cash Provided by (Used in) Operating Activities",
+        "units": {
+          "USD": [
+            {
+              "start": "2024-01-29",
+              "end": "2025-01-26",
+              "val": 64089000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2024"
+            },
+            {
+              "start": "2025-01-27",
+              "end": "2026-01-25",
+              "val": 102718000000,
+              "accn": "0001045810-26-000021",
+              "fy": 2026,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2026-02-25",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

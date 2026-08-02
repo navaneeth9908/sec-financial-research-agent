@@ -22,6 +22,12 @@ uv run sec-research report MSFT --format json
 
 The command resolves the ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. A committed example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
 
+### XBRL concepts and comparable periods
+
+The annual resolver evaluates ordered US-GAAP aliases for every fiscal period instead of locking onto the first concept found. This handles issuer taxonomy transitions such as NVIDIA moving from `RevenueFromContractWithCustomerExcludingAssessedTax` to `Revenues`, while preserving preferred-concept precedence when aliases overlap. Snapshot ratios require every metric to match the selected fiscal end. Revenue growth requires a prior annual end 330–400 days before the latest period, accommodating 52/53-week calendars without treating multi-year gaps as year-over-year growth. Missing or non-comparable data is reported as unsupported instead of silently mixing periods.
+
+Deterministic tests use compact, SEC-derived Apple and NVIDIA Companyfacts fixtures. Each multi-issuer fixture retains filing accessions, period metadata, and its official Companyfacts endpoint provenance.
+
 ### Cache and failure diagnostics
 
 Each SEC response records retrieval metadata on the client as `network`, `fresh`, or `stale`, including cache age and any refresh error. If a refresh exhausts transient retries, the CLI can continue from an expired cached response and emits a visible warning to stderr without contaminating Markdown or JSON report output. Non-retryable HTTP failures stop after one attempt and report the endpoint, status, attempt count, and whether a usable cache was available.
@@ -61,7 +67,7 @@ The initial commit delivers the first vertical slice:
 
 1. Resolve a public-company ticker to CIK.
 2. Download and cache SEC Companyfacts.
-3. Normalize annual Revenue, Net Income, Assets, Liabilities, and Operating Cash Flow.
+3. Normalize annual Revenue, Net Income, Assets, Liabilities, and Operating Cash Flow across issuer-specific concept histories.
 4. Calculate revenue growth, net margin, liabilities/assets, and cash conversion.
 5. Render Markdown or JSON with source citations.
 

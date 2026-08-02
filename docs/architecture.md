@@ -27,9 +27,10 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 2. The application service resolves it through the SEC ticker registry.
 3. The SEC adapter retrieves Companyfacts using a compliant User-Agent.
 4. Raw responses are cached atomically with a TTL.
-5. The normalization layer deduplicates comparative 10-K facts by fiscal period.
-6. The analytics layer calculates ratios from source values.
-7. The renderer emits Markdown/JSON with filing and endpoint citations.
+5. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
+6. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
+7. The analytics layer calculates ratios from source values.
+8. The renderer emits Markdown/JSON with filing and endpoint citations.
 
 ## Reliability rules
 

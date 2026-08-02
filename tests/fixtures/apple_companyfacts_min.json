@@ -1,6 +1,10 @@
 {
   "cik": 320193,
   "entityName": "Apple Inc.",
+  "fixtureProvenance": {
+    "source": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+    "description": "Compact SEC-derived fixture containing selected annual 10-K facts."
+  },
   "facts": {
     "us-gaap": {
       "RevenueFromContractWithCustomerExcludingAssessedTax": {

@@ -15,6 +15,8 @@ Goal: complete a recruiter-ready SEC Financial Research Agent in one week throug
 - Expand XBRL concept resolution and comparable annual-period handling.
 - Add multi-company comparison and additional ratios/trends.
 
+**Status:** in progress — ordered concept aliases now fill fiscal periods across issuer taxonomy transitions, exact-period metric alignment prevents mixed-period snapshots, and annual growth rejects nonconsecutive periods. Multi-company comparison and additional analytics remain next.
+
 ## Day 3 — Filing ingestion and retrieval
 
 - Fetch recent 10-K/10-Q filing metadata and text.
