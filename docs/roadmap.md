@@ -8,6 +8,8 @@ Goal: complete a recruiter-ready SEC Financial Research Agent in one week throug
 - Implement SEC ticker/Companyfacts client with timeout, retry, throttle, and disk cache.
 - Build a cited CLI company snapshot from live SEC data.
 
+**Status:** complete — the client now records cache provenance, retries transient failures, serves stale data only after refresh exhaustion, and emits actionable CLI warnings/errors.
+
 ## Day 2 — Financial analytics engine
 
 - Expand XBRL concept resolution and comparable annual-period handling.

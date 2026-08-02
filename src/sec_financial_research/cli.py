@@ -30,13 +30,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _format_cache_age(age_seconds: float) -> str:
+    if age_seconds >= 3_600:
+        return f"{age_seconds / 3_600:.0f}h"
+    if age_seconds >= 60:
+        return f"{age_seconds / 60:.0f}m"
+    return f"{age_seconds:.0f}s"
+
+
+def _warn_on_stale_cache(client: SECClient) -> None:
+    for metadata in client.cache_metadata.values():
+        if metadata.status != "stale":
+            continue
+        refresh_detail = metadata.refresh_error or "failed for an unknown reason"
+        refresh_detail = refresh_detail.removeprefix("SEC request ")
+        print(
+            f"warning: stale SEC cache used for {metadata.cache_key} "
+            f"({_format_cache_age(metadata.age_seconds)} old); refresh {refresh_detail}",
+            file=sys.stderr,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = FinancialResearchService(SECClient.from_env()).research_company(args.ticker)
+        client = SECClient.from_env()
+        report = FinancialResearchService(client).research_company(args.ticker)
     except (SECClientError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+    _warn_on_stale_cache(client)
 
     if args.output_format == "json":
         rendered = json.dumps(report_to_dict(report), indent=2)

@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,16 @@ Transport = Callable[[str, dict[str, str], float], dict[str, Any]]
 
 class SECClientError(RuntimeError):
     """Raised for unavailable or invalid SEC data."""
+
+
+@dataclass(frozen=True)
+class CacheMetadata:
+    """Describes how a cached SEC response was resolved."""
+
+    cache_key: str
+    status: str
+    age_seconds: float
+    refresh_error: str | None = None
 
 
 def normalize_cik(cik: str | int) -> str:
@@ -59,6 +70,7 @@ class SECClient:
         self.throttle_seconds = max(0.0, float(throttle_seconds))
         self.max_attempts = max(1, int(max_attempts))
         self.transport = transport or _urllib_transport
+        self.cache_metadata: dict[str, CacheMetadata] = {}
         self._last_request_at = 0.0
 
     @classmethod
@@ -96,16 +108,56 @@ class SECClient:
     def _cached_json(self, cache_key: str, url: str) -> dict[str, Any]:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.cache_dir / f"{cache_key}.json"
-        if path.exists() and time.time() - path.stat().st_mtime <= self.cache_ttl_seconds:
-            return json.loads(path.read_text(encoding="utf-8"))
+        cached_payload: dict[str, Any] | None = None
+        age_seconds = 0.0
+        if path.exists():
+            age_seconds = max(0.0, time.time() - path.stat().st_mtime)
+            try:
+                cached_payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                cached_payload = None
+            if cached_payload is not None and age_seconds <= self.cache_ttl_seconds:
+                self.cache_metadata[cache_key] = CacheMetadata(
+                    cache_key=cache_key,
+                    status="fresh",
+                    age_seconds=age_seconds,
+                )
+                return cached_payload
 
-        payload = self._request_json(url)
+        try:
+            payload = self._request_json(url)
+        except SECClientError as exc:
+            if cached_payload is None:
+                raise SECClientError(
+                    f"{exc}; no usable cached response is available"
+                ) from exc
+            cause = exc.__cause__
+            if (
+                isinstance(cause, urllib.error.HTTPError)
+                and cause.code not in TRANSIENT_STATUS_CODES
+            ):
+                raise SECClientError(
+                    f"{exc}; stale cache was not used for non-transient "
+                    f"HTTP {cause.code}"
+                ) from exc
+            self.cache_metadata[cache_key] = CacheMetadata(
+                cache_key=cache_key,
+                status="stale",
+                age_seconds=age_seconds,
+                refresh_error=str(exc),
+            )
+            return cached_payload
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(
             json.dumps(payload, separators=(",", ":")),
             encoding="utf-8",
         )
         temporary.replace(path)
+        self.cache_metadata[cache_key] = CacheMetadata(
+            cache_key=cache_key,
+            status="network",
+            age_seconds=0.0,
+        )
         return payload
 
     def _request_json(self, url: str) -> dict[str, Any]:
@@ -115,7 +167,9 @@ class SECClient:
             "Accept-Encoding": "identity",
         }
         last_error: Exception | None = None
+        attempts_made = 0
         for attempt in range(1, self.max_attempts + 1):
+            attempts_made = attempt
             self._throttle()
             try:
                 return self.transport(url, headers, self.timeout_seconds)
@@ -128,7 +182,18 @@ class SECClient:
                 if attempt == self.max_attempts:
                     break
             time.sleep(min(2 ** (attempt - 1), 4))
-        raise SECClientError(f"SEC request failed for {url}: {last_error}") from last_error
+        attempt_label = "attempt" if attempts_made == 1 else "attempts"
+        if isinstance(last_error, urllib.error.HTTPError):
+            detail = (
+                f"HTTP {last_error.code} {last_error.reason} "
+                f"({last_error})"
+            )
+        else:
+            detail = str(last_error)
+        raise SECClientError(
+            f"SEC request failed after {attempts_made} {attempt_label} "
+            f"for {url}: {detail}"
+        ) from last_error
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request_at

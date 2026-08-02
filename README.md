@@ -22,6 +22,10 @@ uv run sec-research report MSFT --format json
 
 The command resolves the ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. A committed example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
 
+### Cache and failure diagnostics
+
+Each SEC response records retrieval metadata on the client as `network`, `fresh`, or `stale`, including cache age and any refresh error. If a refresh exhausts transient retries, the CLI can continue from an expired cached response and emits a visible warning to stderr without contaminating Markdown or JSON report output. Non-retryable HTTP failures stop after one attempt and report the endpoint, status, attempt count, and whether a usable cache was available.
+
 ## Production architecture
 
 ```mermaid

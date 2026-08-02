@@ -36,7 +36,8 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 - Timeout every HTTP request.
 - Retry only transient failures (`429`, `500`, `502`, `503`, `504`) with bounded backoff.
 - Respect SEC fair-access guidance and throttle requests.
-- Never hide stale-cache use; future API responses will expose cache metadata.
+- Never hide stale-cache use: expired payloads are served only after a failed refresh, and the CLI warns with cache age and refresh diagnostics.
+- Record `network`, `fresh`, or `stale` metadata for each SEC cache key so later API responses can expose the same provenance.
 - Keep raw responses out of Git because they can be large and change over time.
 - Unit tests use a compact SEC-derived fixture; live SEC checks remain explicit smoke tests.
 
