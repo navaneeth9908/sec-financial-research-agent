@@ -1,0 +1,53 @@
+"""Domain models shared across application and infrastructure layers."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class CompanyIdentity:
+    ticker: str
+    cik: str
+    name: str
+
+
+@dataclass(frozen=True)
+class FactPoint:
+    concept: str
+    label: str
+    value: int | float
+    unit: str
+    end: str
+    filed: str
+    accession: str
+    form: str
+    fiscal_year: int | None
+    start: str | None = None
+
+
+@dataclass(frozen=True)
+class FinancialSnapshot:
+    identity: CompanyIdentity
+    fiscal_year: int
+    fiscal_end: str
+    metrics: dict[str, FactPoint]
+    ratios: dict[str, float]
+
+
+@dataclass(frozen=True)
+class Citation:
+    title: str
+    url: str
+
+
+@dataclass(frozen=True)
+class ResearchReport:
+    snapshot: FinancialSnapshot
+    summary: str
+    citations: tuple[Citation, ...]
+    generated_at: str
+
+
+JsonObject = dict[str, Any]

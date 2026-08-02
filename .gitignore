@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+
+# Runtime cache and generated reports
+.cache/
+artifacts/
+*.log
+
+# Secrets
+.env
+.env.*
+!.env.example
