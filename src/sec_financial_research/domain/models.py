@@ -50,4 +50,18 @@ class ResearchReport:
     generated_at: str
 
 
+@dataclass(frozen=True)
+class CompanyComparison:
+    snapshot: FinancialSnapshot
+    normalized_metrics: dict[str, float]
+    citations: tuple[Citation, ...]
+
+
+@dataclass(frozen=True)
+class ComparisonReport:
+    companies: tuple[CompanyComparison, ...]
+    ratio_rankings: dict[str, tuple[str, ...]]
+    generated_at: str
+
+
 JsonObject = dict[str, Any]

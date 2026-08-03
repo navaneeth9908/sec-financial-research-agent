@@ -9,7 +9,12 @@ from pathlib import Path
 
 from sec_financial_research.application.research_service import FinancialResearchService
 from sec_financial_research.infrastructure.sec_client import SECClient, SECClientError
-from sec_financial_research.interfaces.reporting import report_to_dict, render_markdown
+from sec_financial_research.interfaces.reporting import (
+    comparison_to_dict,
+    render_comparison_markdown,
+    render_markdown,
+    report_to_dict,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,6 +32,20 @@ def build_parser() -> argparse.ArgumentParser:
         dest="output_format",
     )
     report.add_argument("--output", type=Path, help="Optional output file")
+
+    compare = subparsers.add_parser(
+        "compare", help="Compare latest annual metrics for two or more companies"
+    )
+    compare.add_argument(
+        "tickers", nargs="+", help="Public-company tickers, for example AAPL NVDA"
+    )
+    compare.add_argument(
+        "--format",
+        choices=("markdown", "json"),
+        default="markdown",
+        dest="output_format",
+    )
+    compare.add_argument("--output", type=Path, help="Optional output file")
     return parser
 
 
@@ -55,17 +74,26 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         client = SECClient.from_env()
-        report = FinancialResearchService(client).research_company(args.ticker)
+        service = FinancialResearchService(client)
+        if args.command == "compare":
+            result = service.research_companies(args.tickers)
+        else:
+            result = service.research_company(args.ticker)
     except (SECClientError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     _warn_on_stale_cache(client)
 
-    if args.output_format == "json":
-        rendered = json.dumps(report_to_dict(report), indent=2)
+    if args.command == "compare":
+        if args.output_format == "json":
+            rendered = json.dumps(comparison_to_dict(result), indent=2)
+        else:
+            rendered = render_comparison_markdown(result)
+    elif args.output_format == "json":
+        rendered = json.dumps(report_to_dict(result), indent=2)
     else:
-        rendered = render_markdown(report)
+        rendered = render_markdown(result)
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

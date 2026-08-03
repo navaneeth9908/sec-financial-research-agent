@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from sec_financial_research.analytics.financials import build_financial_snapshot
 from sec_financial_research.domain.models import (
     Citation,
+    CompanyComparison,
     CompanyIdentity,
+    ComparisonReport,
+    FinancialSnapshot,
     ResearchReport,
 )
 
@@ -60,11 +63,64 @@ class FinancialResearchService:
             snapshot=snapshot,
             summary=summary,
             citations=citations,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
+        )
+
+    def research_companies(self, tickers: list[str]) -> ComparisonReport:
+        normalized_tickers = [ticker.strip().upper() for ticker in tickers]
+        if len(normalized_tickers) < 2 or len(set(normalized_tickers)) != len(
+            normalized_tickers
+        ):
+            raise ValueError(
+                "Comparison requires at least two distinct tickers with no duplicates"
+            )
+
+        reports = tuple(
+            self.research_company(ticker) for ticker in normalized_tickers
+        )
+        companies = tuple(
+            CompanyComparison(
+                snapshot=report.snapshot,
+                normalized_metrics=_normalize_usd_billions(report.snapshot),
+                citations=report.citations,
+            )
+            for report in reports
+        )
+        ratio_names = reports[0].snapshot.ratios if reports else {}
+        ratio_rankings = {
+            ratio_name: tuple(
+                company.snapshot.identity.ticker
+                for company in sorted(
+                    companies,
+                    key=lambda company: (
+                        -company.snapshot.ratios[ratio_name],
+                        company.snapshot.identity.ticker,
+                    ),
+                )
+            )
+            for ratio_name in ratio_names
+        }
+        return ComparisonReport(
+            companies=companies,
+            ratio_rankings=ratio_rankings,
+            generated_at=datetime.now(UTC).isoformat(),
         )
 
 
-def _currency(value: int | float) -> str:
+def _normalize_usd_billions(snapshot: FinancialSnapshot) -> dict[str, float]:
+    for metric_name, point in snapshot.metrics.items():
+        if point.unit != "USD":
+            raise ValueError(
+                f"Cannot normalize {snapshot.identity.ticker} {metric_name} "
+                f"from {point.unit}; expected USD"
+            )
+    return {
+        metric_name: float(point.value) / 1_000_000_000
+        for metric_name, point in snapshot.metrics.items()
+    }
+
+
+def _currency(value: float) -> str:
     absolute = abs(float(value))
     if absolute >= 1_000_000_000_000:
         return f"${value / 1_000_000_000_000:.2f}T"

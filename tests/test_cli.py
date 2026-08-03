@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sec_financial_research import cli
 from sec_financial_research.infrastructure.sec_client import SECClient
+from tests.test_comparison import ComparisonSECClient
 
 FIXTURE = Path(__file__).parent / "fixtures" / "apple_companyfacts_min.json"
 
@@ -68,3 +69,25 @@ def test_cli_reports_sec_failure_when_no_cache_is_available(tmp_path: Path, monk
     assert "error: SEC request failed after 1 attempt" in captured.err
     assert "HTTP 404 Not Found" in captured.err
     assert "no usable cached response" in captured.err
+
+
+def test_cli_compare_outputs_normalized_ranked_cited_json(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli.SECClient, "from_env", lambda: ComparisonSECClient()
+    )
+
+    exit_code = cli.main(["compare", "AAPL", "NVDA", "--format", "json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert [company["company"]["ticker"] for company in payload["companies"]] == [
+        "AAPL",
+        "NVDA",
+    ]
+    assert payload["normalization"]["monetary_unit"] == "USD billions"
+    assert payload["ratio_rankings"]["net_margin_pct"][0]["ticker"] == "NVDA"
+    assert payload["companies"][0]["citations"][1]["url"].startswith(
+        "https://www.sec.gov/Archives/edgar/data/"
+    )

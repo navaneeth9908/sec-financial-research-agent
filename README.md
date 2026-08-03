@@ -18,9 +18,11 @@ SEC asks automated clients to identify themselves. Configure `SEC_USER_AGENT` wi
 uv run --group dev pytest
 uv run sec-research report AAPL
 uv run sec-research report MSFT --format json
+uv run sec-research compare AAPL NVDA
+uv run sec-research compare AAPL NVDA --format json --output artifacts/aapl-nvda.json
 ```
 
-The command resolves the ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. A committed example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
+The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
 
 ### XBRL concepts and comparable periods
 
@@ -70,6 +72,7 @@ The initial commit delivers the first vertical slice:
 3. Normalize annual Revenue, Net Income, Assets, Liabilities, and Operating Cash Flow across issuer-specific concept histories.
 4. Calculate revenue growth, net margin, liabilities/assets, and cash conversion.
 5. Render Markdown or JSON with source citations.
+6. Compare multiple issuers with USD-billion metrics, deterministic ratio rankings, visible fiscal ends, and per-company evidence.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the complete one-week plan and [`docs/architecture.md`](docs/architecture.md) for component boundaries.
 
