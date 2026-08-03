@@ -5,7 +5,9 @@ description = "Production-oriented financial research agent powered by public SE
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Sai Navaneeth Thota" }]
-dependencies = []
+dependencies = [
+    "duckdb>=1.4.0",
+]
 
 [build-system]
 requires = ["hatchling"]

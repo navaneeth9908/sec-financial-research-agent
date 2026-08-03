@@ -30,7 +30,8 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 5. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
 6. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
 7. The analytics layer calculates ratios from source values.
-8. The renderer emits Markdown/JSON with filing and endpoint citations.
+8. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
+9. The renderer emits Markdown/JSON with filing and endpoint citations.
 
 ## Reliability rules
 
@@ -39,6 +40,8 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 - Respect SEC fair-access guidance and throttle requests.
 - Never hide stale-cache use: expired payloads are served only after a failed refresh, and the CLI warns with cache age and refresh diagnostics.
 - Record `network`, `fresh`, or `stale` metadata for each SEC cache key so later API responses can expose the same provenance.
+- Make mart ingestion idempotent by replacing one CIK/fiscal-period slice in a transaction, with primary keys as a duplicate guard.
+- Reject source URLs, fiscal periods, and filing accessions that do not agree with the snapshot identity before writing any rows.
 - Keep raw responses out of Git because they can be large and change over time.
 - Unit tests use a compact SEC-derived fixture; live SEC checks remain explicit smoke tests.
 

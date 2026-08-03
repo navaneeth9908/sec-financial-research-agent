@@ -5,6 +5,7 @@ import urllib.error
 from pathlib import Path
 
 from sec_financial_research import cli
+from sec_financial_research.infrastructure.research_mart import DuckDBResearchMart
 from sec_financial_research.infrastructure.sec_client import SECClient
 from tests.test_comparison import ComparisonSECClient
 
@@ -91,3 +92,33 @@ def test_cli_compare_outputs_normalized_ranked_cited_json(monkeypatch, capsys):
     assert payload["companies"][0]["citations"][1]["url"].startswith(
         "https://www.sec.gov/Archives/edgar/data/"
     )
+
+
+def test_cli_mart_load_ingests_then_queries_the_company_slice(
+    tmp_path: Path, monkeypatch, capsys
+):
+    monkeypatch.setattr(cli.SECClient, "from_env", lambda: ComparisonSECClient())
+    database = tmp_path / "research.duckdb"
+
+    exit_code = cli.main(
+        ["mart-load", "AAPL", "--database", str(database)]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload == {
+        "database": str(database),
+        "ticker": "AAPL",
+        "fiscal_end": "2025-09-27",
+        "metric_rows": 5,
+        "ratio_rows": 4,
+        "source_url": (
+            "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"
+        ),
+    }
+
+    with DuckDBResearchMart(database) as mart:
+        assert len(mart.company_metrics("AAPL")) == 5
+        assert len(mart.company_ratios("AAPL")) == 4

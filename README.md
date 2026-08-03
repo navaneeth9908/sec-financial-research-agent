@@ -20,6 +20,7 @@ uv run sec-research report AAPL
 uv run sec-research report MSFT --format json
 uv run sec-research compare AAPL NVDA
 uv run sec-research compare AAPL NVDA --format json --output artifacts/aapl-nvda.json
+uv run sec-research mart-load AAPL --database .cache/research.duckdb
 ```
 
 The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
@@ -29,6 +30,22 @@ The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts,
 The annual resolver evaluates ordered US-GAAP aliases for every fiscal period instead of locking onto the first concept found. This handles issuer taxonomy transitions such as NVIDIA moving from `RevenueFromContractWithCustomerExcludingAssessedTax` to `Revenues`, while preserving preferred-concept precedence when aliases overlap. Snapshot ratios require every metric to match the selected fiscal end. Revenue growth requires a prior annual end 330–400 days before the latest period, accommodating 52/53-week calendars without treating multi-year gaps as year-over-year growth. Missing or non-comparable data is reported as unsupported instead of silently mixing periods.
 
 Deterministic tests use compact, SEC-derived Apple and NVIDIA Companyfacts fixtures. Each multi-issuer fixture retains filing accessions, period metadata, and its official Companyfacts endpoint provenance.
+
+### DuckDB research mart
+
+`mart-load` runs the cited company-report pipeline, then atomically replaces that
+company and fiscal-period slice in a local DuckDB database. Repeating the command
+is idempotent: primary keys prevent duplicate metric or ratio rows. The
+`financial_metric_facts` table retains ticker/CIK, fiscal period, source value and
+unit, XBRL concept, filing date, SEC accession, official Companyfacts URL, and
+ingestion timestamp. `financial_ratios` stores calculated percentages alongside
+the calculation version and source accessions.
+
+Pre-ingestion quality gates reject a Companyfacts URL that does not match the CIK,
+facts from a different fiscal period, and accessions belonging to a different
+issuer. The command queries both tables after loading and prints the persisted row
+counts, so it doubles as a lightweight ingestion/query smoke path. The default
+database is `.cache/research.duckdb`, which remains outside version control.
 
 ### Cache and failure diagnostics
 

@@ -15,7 +15,7 @@ Goal: complete a recruiter-ready SEC Financial Research Agent in one week throug
 - Expand XBRL concept resolution and comparable annual-period handling.
 - Add multi-company comparison and additional ratios/trends.
 
-**Status:** in progress — ordered concept aliases now fill fiscal periods across issuer taxonomy transitions, exact-period metric alignment prevents mixed-period snapshots, and annual growth rejects nonconsecutive periods. The CLI now compares two or more issuers with source-preserving USD-billion normalization, deterministic ratio rankings, visible fiscal ends, and per-company SEC citations. Additional trend depth remains next.
+**Status:** in progress — ordered concept aliases now fill fiscal periods across issuer taxonomy transitions, exact-period metric alignment prevents mixed-period snapshots, and annual growth rejects nonconsecutive periods. The CLI now compares two or more issuers with source-preserving USD-billion normalization, deterministic ratio rankings, visible fiscal ends, and per-company SEC citations. A lightweight DuckDB research mart adds idempotent company-period ingestion, SEC lineage fields, pre-write data-quality gates, and a CLI load/query smoke path. Additional trend depth remains next.
 
 ## Day 3 — Filing ingestion and retrieval
 

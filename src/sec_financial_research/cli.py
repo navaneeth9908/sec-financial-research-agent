@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from sec_financial_research.application.research_service import FinancialResearchService
+from sec_financial_research.infrastructure.research_mart import DuckDBResearchMart
 from sec_financial_research.infrastructure.sec_client import SECClient, SECClientError
 from sec_financial_research.interfaces.reporting import (
     comparison_to_dict,
@@ -46,6 +47,20 @@ def build_parser() -> argparse.ArgumentParser:
         dest="output_format",
     )
     compare.add_argument("--output", type=Path, help="Optional output file")
+
+    mart_load = subparsers.add_parser(
+        "mart-load",
+        help="Ingest a company snapshot into the DuckDB analytical mart",
+    )
+    mart_load.add_argument(
+        "ticker", help="Public-company ticker, for example AAPL or MSFT"
+    )
+    mart_load.add_argument(
+        "--database",
+        type=Path,
+        default=Path(".cache/research.duckdb"),
+        help="DuckDB database path (default: .cache/research.duckdb)",
+    )
     return parser
 
 
@@ -84,6 +99,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     _warn_on_stale_cache(client)
+
+    if args.command == "mart-load":
+        source_url = result.citations[0].url
+        with DuckDBResearchMart(args.database) as mart:
+            mart.ingest_snapshot(result.snapshot, source_url=source_url)
+            metrics = mart.company_metrics(result.snapshot.identity.ticker)
+            ratios = mart.company_ratios(result.snapshot.identity.ticker)
+        rendered = json.dumps(
+            {
+                "database": str(args.database),
+                "ticker": result.snapshot.identity.ticker,
+                "fiscal_end": result.snapshot.fiscal_end,
+                "metric_rows": len(metrics),
+                "ratio_rows": len(ratios),
+                "source_url": source_url,
+            },
+            indent=2,
+        )
+        print(rendered)
+        return 0
 
     if args.command == "compare":
         if args.output_format == "json":
