@@ -22,6 +22,7 @@ uv run sec-research compare AAPL NVDA
 uv run sec-research compare AAPL NVDA --format json --output artifacts/aapl-nvda.json
 uv run sec-research mart-load AAPL --database .cache/research.duckdb
 uv run sec-research filings AAPL --limit 2
+uv run sec-research filing-chunks AAPL --max-chunks 3
 ```
 
 The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
@@ -62,6 +63,16 @@ Submission CIKs, accession prefixes, and primary-document paths are validated
 before archive URLs are accepted. Metadata and filing documents are atomically
 cached under `SEC_CACHE_DIR`; stale payloads are only used after transient refresh
 failures and are surfaced through the existing CLI warning path.
+
+`filing-chunks` turns the latest 10-K inline-XBRL HTML into normalized visible
+text, excluding hidden facts, scripts, and styles. It detects Form 10-K Item
+headings and creates bounded, overlapping chunks without crossing section
+boundaries. Every chunk carries a deterministic ID, CIK, accession, form,
+filing/report dates, normalized section label, primary-document URL, and filing
+index URL. The command prints a compact cited sample plus extraction, section,
+chunk-count, and cache evidence rather than emitting the complete filing text.
+Chunk size, overlap, and sample count are configurable with `--chunk-size`,
+`--overlap-chars`, and `--max-chunks`.
 
 ### Cache and failure diagnostics
 

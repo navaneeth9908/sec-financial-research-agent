@@ -35,6 +35,24 @@ class FilingDocument:
 
 
 @dataclass(frozen=True)
+class FilingChunk:
+    """A filing text chunk with enough SEC metadata to reconstruct its citation."""
+
+    chunk_id: str
+    chunk_index: int
+    cik: str
+    company_name: str
+    accession: str
+    form: str
+    filing_date: str
+    report_date: str
+    section: str
+    text: str
+    source_url: str
+    index_url: str
+
+
+@dataclass(frozen=True)
 class FactPoint:
     concept: str
     label: str

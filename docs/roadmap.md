@@ -22,7 +22,7 @@ Goal: complete a recruiter-ready SEC Financial Research Agent in one week throug
 - Fetch recent 10-K/10-Q filing metadata and text.
 - Build chunking, semantic retrieval, and citation-preserving filing search.
 
-**Status:** in progress — the SEC client now ingests recent 10-K/10-Q submissions metadata and primary filing documents with fair-access headers, bounded retries/throttling, atomic disk caching, cache provenance, issuer/accession/path validation, and a live CLI smoke path. Chunking and citation-preserving retrieval remain next.
+**Status:** in progress — the SEC client now ingests recent 10-K/10-Q submissions metadata and primary filing documents with fair-access headers, bounded retries/throttling, atomic disk caching, cache provenance, issuer/accession/path validation, and live CLI smoke paths. Inline-XBRL HTML extraction removes hidden/non-content markup, detects canonical 10-K Item sections, and emits bounded overlapping chunks that retain accession, section, filing dates, primary-document URL, and filing-index citation metadata. Semantic retrieval over these chunks remains next.
 
 ## Day 4 — Agent orchestration and evaluation
 

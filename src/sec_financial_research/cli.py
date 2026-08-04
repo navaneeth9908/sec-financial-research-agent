@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 
 from sec_financial_research.application.research_service import FinancialResearchService
+from sec_financial_research.domain.models import FilingChunk
+from sec_financial_research.infrastructure.filing_parser import (
+    chunk_filing_document,
+    extract_filing_text,
+)
 from sec_financial_research.infrastructure.research_mart import DuckDBResearchMart
 from sec_financial_research.infrastructure.sec_client import SECClient, SECClientError
 from sec_financial_research.interfaces.reporting import (
@@ -69,6 +74,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit to one form type; repeat to include both",
     )
 
+    filing_chunks = subparsers.add_parser(
+        "filing-chunks",
+        help="Extract and sample citation-preserving chunks from the latest 10-K",
+    )
+    filing_chunks.add_argument(
+        "ticker", help="Public-company ticker, for example AAPL or MSFT"
+    )
+    filing_chunks.add_argument(
+        "--max-chunks",
+        type=int,
+        default=3,
+        help="Maximum sample chunks to print (default: 3)",
+    )
+    filing_chunks.add_argument(
+        "--chunk-size",
+        type=int,
+        default=1_800,
+        help="Maximum characters per chunk (default: 1800)",
+    )
+    filing_chunks.add_argument(
+        "--overlap-chars",
+        type=int,
+        default=200,
+        help="Approximate whole-word overlap between chunks (default: 200)",
+    )
+
     mart_load = subparsers.add_parser(
         "mart-load",
         help="Ingest a company snapshot into the DuckDB analytical mart",
@@ -106,12 +137,93 @@ def _warn_on_stale_cache(client: SECClient) -> None:
         )
 
 
+def _representative_filing_chunks(
+    chunks: tuple[FilingChunk, ...], limit: int
+) -> tuple[FilingChunk, ...]:
+    section_order: list[str] = []
+    representatives: dict[str, FilingChunk] = {}
+    for chunk in chunks:
+        if chunk.section == "Preamble":
+            continue
+        if chunk.section not in representatives:
+            section_order.append(chunk.section)
+            representatives[chunk.section] = chunk
+        elif len(chunk.text) > len(representatives[chunk.section].text):
+            representatives[chunk.section] = chunk
+
+    selected = [representatives[section] for section in section_order[:limit]]
+    selected_ids = {chunk.chunk_id for chunk in selected}
+    for chunk in chunks:
+        if len(selected) == limit:
+            break
+        if chunk.chunk_id in selected_ids:
+            continue
+        selected.append(chunk)
+    return tuple(selected)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         client = SECClient.from_env()
         service = FinancialResearchService(client)
-        if args.command == "filings":
+        if args.command == "filing-chunks":
+            if args.max_chunks < 1:
+                raise ValueError("max-chunks must be at least 1")
+            identity = client.resolve_ticker(args.ticker)
+            filings = client.get_recent_filings(
+                identity.cik,
+                forms=("10-K",),
+                limit=1,
+            )
+            if not filings:
+                raise SECClientError(f"No recent 10-K filing was found for {identity.ticker}")
+            filing = filings[0]
+            document = client.get_filing_document(filing)
+            extracted_text = extract_filing_text(document.text)
+            chunks = chunk_filing_document(
+                document,
+                max_chars=args.chunk_size,
+                overlap_chars=args.overlap_chars,
+            )
+            cache_key = f"filing_{filing.accession}_{filing.primary_document}"
+            result = {
+                "company": {
+                    "ticker": identity.ticker,
+                    "cik": identity.cik,
+                    "name": identity.name,
+                },
+                "filing": {
+                    "accession": filing.accession,
+                    "form": filing.form,
+                    "filing_date": filing.filing_date,
+                    "report_date": filing.report_date,
+                    "primary_document_url": filing.primary_document_url,
+                    "index_url": filing.index_url,
+                    "cache_status": client.cache_metadata[cache_key].status,
+                },
+                "extraction": {
+                    "document_characters": len(document.text),
+                    "extracted_characters": len(extracted_text),
+                    "chunk_count": len(chunks),
+                    "sections": list(dict.fromkeys(chunk.section for chunk in chunks)),
+                },
+                "sample_chunks": [
+                    {
+                        "chunk_id": chunk.chunk_id,
+                        "chunk_index": chunk.chunk_index,
+                        "section": chunk.section,
+                        "text": chunk.text,
+                        "accession": chunk.accession,
+                        "source_url": chunk.source_url,
+                        "index_url": chunk.index_url,
+                    }
+                    for chunk in _representative_filing_chunks(
+                        chunks, args.max_chunks
+                    )
+                ],
+            }
+        elif args.command == "filings":
             identity = client.resolve_ticker(args.ticker)
             forms = tuple(args.forms) if args.forms else ("10-K", "10-Q")
             filings = client.get_recent_filings(
@@ -159,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _warn_on_stale_cache(client)
 
-    if args.command == "filings":
+    if args.command in {"filings", "filing-chunks"}:
         print(json.dumps(result, indent=2))
         return 0
 

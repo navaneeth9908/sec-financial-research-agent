@@ -28,11 +28,13 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 3. The SEC adapter retrieves Companyfacts using a compliant User-Agent.
 4. Raw responses are cached atomically with a TTL.
 5. Filing ingestion reads the issuer's SEC submissions feed, validates CIK/accession/document-path provenance, and caches selected 10-K/10-Q primary documents.
-6. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
-7. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
-8. The analytics layer calculates ratios from source values.
-9. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
-10. The renderer emits Markdown/JSON with filing and endpoint citations.
+6. The filing parser removes hidden inline-XBRL/non-content markup, detects canonical 10-K Item headings, and creates bounded overlapping chunks without crossing section boundaries.
+7. Each filing chunk retains deterministic ID/index fields plus CIK, accession, form, filing/report dates, section, primary-document URL, and filing-index URL for downstream citation guards.
+8. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
+9. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
+10. The analytics layer calculates ratios from source values.
+11. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
+12. The renderer emits Markdown/JSON with filing and endpoint citations.
 
 ## Reliability rules
 

@@ -143,6 +143,94 @@ def test_cli_filings_fetches_recent_metadata_and_primary_documents(
     ]
 
 
+def test_cli_filing_chunks_outputs_a_cited_10k_sample(tmp_path: Path, monkeypatch, capsys):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000320193-25-000079"],
+                "filingDate": ["2025-10-31"],
+                "reportDate": ["2025-09-27"],
+                "form": ["10-K"],
+                "primaryDocument": ["aapl-20250927.htm"],
+            }
+        },
+    }
+
+    def json_transport(url: str, headers: dict[str, str], timeout: float) -> dict:
+        if url.endswith("company_tickers.json"):
+            return {
+                "0": {
+                    "cik_str": 320193,
+                    "ticker": "AAPL",
+                    "title": "Apple Inc.",
+                }
+            }
+        return submissions
+
+    filing_html = """
+    <html><body>
+      <h2>Item 1.</h2><p>1</p>
+      <h2>Item 1A.</h2><p>5</p>
+      <h2>Item 1. Business</h2>
+      <p>Apple designs, manufactures and markets smartphones, personal computers,
+      tablets, wearables and accessories, and sells related services.</p>
+      <h2>Item 1A. Risk Factors</h2>
+      <p>The Company's operations and performance depend substantially on global
+      economic conditions and complex supply chains.</p>
+    </body></html>
+    """
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=json_transport,
+        text_transport=lambda url, headers, timeout: filing_html,
+    )
+    monkeypatch.setattr(cli.SECClient, "from_env", lambda: client)
+
+    exit_code = cli.main(
+        [
+            "filing-chunks",
+            "AAPL",
+            "--max-chunks",
+            "2",
+            "--chunk-size",
+            "100",
+            "--overlap-chars",
+            "20",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["filing"]["form"] == "10-K"
+    assert payload["filing"]["accession"] == "0000320193-25-000079"
+    assert payload["extraction"]["chunk_count"] >= 2
+    assert payload["extraction"]["sections"] == [
+        "Item 1 — Business",
+        "Item 1A — Risk Factors",
+    ]
+    assert len(payload["sample_chunks"]) == 2
+    assert [chunk["section"] for chunk in payload["sample_chunks"]] == [
+        "Item 1 — Business",
+        "Item 1A — Risk Factors",
+    ]
+    assert "designs, manufactures" in payload["sample_chunks"][0]["text"]
+    assert "operations and performance" in payload["sample_chunks"][1]["text"]
+    assert all(
+        chunk["accession"] == "0000320193-25-000079"
+        for chunk in payload["sample_chunks"]
+    )
+    assert all(
+        chunk["source_url"] == payload["filing"]["primary_document_url"]
+        for chunk in payload["sample_chunks"]
+    )
+
+
 def test_cli_compare_outputs_normalized_ranked_cited_json(monkeypatch, capsys):
     monkeypatch.setattr(
         cli.SECClient, "from_env", lambda: ComparisonSECClient()
