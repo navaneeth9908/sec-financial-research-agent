@@ -27,11 +27,12 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 2. The application service resolves it through the SEC ticker registry.
 3. The SEC adapter retrieves Companyfacts using a compliant User-Agent.
 4. Raw responses are cached atomically with a TTL.
-5. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
-6. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
-7. The analytics layer calculates ratios from source values.
-8. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
-9. The renderer emits Markdown/JSON with filing and endpoint citations.
+5. Filing ingestion reads the issuer's SEC submissions feed, validates CIK/accession/document-path provenance, and caches selected 10-K/10-Q primary documents.
+6. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
+7. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
+8. The analytics layer calculates ratios from source values.
+9. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
+10. The renderer emits Markdown/JSON with filing and endpoint citations.
 
 ## Reliability rules
 
@@ -40,6 +41,8 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 - Respect SEC fair-access guidance and throttle requests.
 - Never hide stale-cache use: expired payloads are served only after a failed refresh, and the CLI warns with cache age and refresh diagnostics.
 - Record `network`, `fresh`, or `stale` metadata for each SEC cache key so later API responses can expose the same provenance.
+- Apply the same timeout, throttle, retry, stale-cache, and atomic-write controls to SEC submissions JSON and primary filing HTML.
+- Reject filing metadata whose submission CIK, accession prefix, or primary-document path disagrees with the requested issuer before fetching archive content.
 - Make mart ingestion idempotent by replacing one CIK/fiscal-period slice in a transaction, with primary keys as a duplicate guard.
 - Reject source URLs, fiscal periods, and filing accessions that do not agree with the snapshot identity before writing any rows.
 - Keep raw responses out of Git because they can be large and change over time.

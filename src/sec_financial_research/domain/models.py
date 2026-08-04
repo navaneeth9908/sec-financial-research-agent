@@ -14,6 +14,27 @@ class CompanyIdentity:
 
 
 @dataclass(frozen=True)
+class FilingMetadata:
+    cik: str
+    company_name: str
+    accession: str
+    form: str
+    filing_date: str
+    report_date: str
+    primary_document: str
+    submissions_url: str
+    primary_document_url: str
+    index_url: str
+
+
+@dataclass(frozen=True)
+class FilingDocument:
+    filing: FilingMetadata
+    text: str
+    source_url: str
+
+
+@dataclass(frozen=True)
 class FactPoint:
     concept: str
     label: str

@@ -21,6 +21,7 @@ uv run sec-research report MSFT --format json
 uv run sec-research compare AAPL NVDA
 uv run sec-research compare AAPL NVDA --format json --output artifacts/aapl-nvda.json
 uv run sec-research mart-load AAPL --database .cache/research.duckdb
+uv run sec-research filings AAPL --limit 2
 ```
 
 The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
@@ -46,6 +47,21 @@ facts from a different fiscal period, and accessions belonging to a different
 issuer. The command queries both tables after loading and prints the persisted row
 counts, so it doubles as a lightweight ingestion/query smoke path. The default
 database is `.cache/research.duckdb`, which remains outside version control.
+
+### Filing ingestion
+
+`filings` resolves the ticker, reads the issuer's official SEC submissions feed,
+filters recent metadata to Forms 10-K and 10-Q, and downloads each primary filing
+document with the same descriptive User-Agent, timeout, throttle, retry, and
+cache policy as Companyfacts. The JSON output retains the accession, filing and
+report dates, primary-document URL, filing-index URL, document size, and observed
+cache status. Optional repeated `--form 10-K` / `--form 10-Q` flags narrow the
+forms, while `--limit` bounds the number of downloaded documents.
+
+Submission CIKs, accession prefixes, and primary-document paths are validated
+before archive URLs are accepted. Metadata and filing documents are atomically
+cached under `SEC_CACHE_DIR`; stale payloads are only used after transient refresh
+failures and are surfaced through the existing CLI warning path.
 
 ### Cache and failure diagnostics
 

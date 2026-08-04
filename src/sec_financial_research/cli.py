@@ -48,6 +48,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare.add_argument("--output", type=Path, help="Optional output file")
 
+    filings = subparsers.add_parser(
+        "filings",
+        help="Fetch recent 10-K/10-Q metadata and cache primary filing documents",
+    )
+    filings.add_argument(
+        "ticker", help="Public-company ticker, for example AAPL or MSFT"
+    )
+    filings.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum number of matching filings to fetch (default: 5)",
+    )
+    filings.add_argument(
+        "--form",
+        action="append",
+        choices=("10-K", "10-Q"),
+        dest="forms",
+        help="Limit to one form type; repeat to include both",
+    )
+
     mart_load = subparsers.add_parser(
         "mart-load",
         help="Ingest a company snapshot into the DuckDB analytical mart",
@@ -90,7 +111,45 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client = SECClient.from_env()
         service = FinancialResearchService(client)
-        if args.command == "compare":
+        if args.command == "filings":
+            identity = client.resolve_ticker(args.ticker)
+            forms = tuple(args.forms) if args.forms else ("10-K", "10-Q")
+            filings = client.get_recent_filings(
+                identity.cik,
+                forms=forms,
+                limit=args.limit,
+            )
+            filing_rows = []
+            for filing in filings:
+                document = client.get_filing_document(filing)
+                cache_key = f"filing_{filing.accession}_{filing.primary_document}"
+                filing_rows.append(
+                    {
+                        "accession": filing.accession,
+                        "form": filing.form,
+                        "filing_date": filing.filing_date,
+                        "report_date": filing.report_date,
+                        "primary_document_url": filing.primary_document_url,
+                        "index_url": filing.index_url,
+                        "document_characters": len(document.text),
+                        "cache_status": client.cache_metadata[cache_key].status,
+                    }
+                )
+            result = {
+                "company": {
+                    "ticker": identity.ticker,
+                    "cik": identity.cik,
+                    "name": identity.name,
+                },
+                "submissions_url": (
+                    filings[0].submissions_url
+                    if filings
+                    else "https://data.sec.gov/submissions/"
+                    f"CIK{identity.cik}.json"
+                ),
+                "filings": filing_rows,
+            }
+        elif args.command == "compare":
             result = service.research_companies(args.tickers)
         else:
             result = service.research_company(args.ticker)
@@ -99,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     _warn_on_stale_cache(client)
+
+    if args.command == "filings":
+        print(json.dumps(result, indent=2))
+        return 0
 
     if args.command == "mart-load":
         source_url = result.citations[0].url

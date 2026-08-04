@@ -54,6 +54,194 @@ def test_client_resolves_ticker_and_caches_companyfacts(tmp_path: Path):
     assert client.cache_metadata["companyfacts_0000320193"].status == "fresh"
 
 
+def test_recent_filings_are_filtered_and_retain_official_sec_links(tmp_path: Path):
+    calls: list[str] = []
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": [
+                    "0000320193-25-000079",
+                    "0000320193-25-000081",
+                    "0000320193-25-000057",
+                ],
+                "filingDate": ["2025-08-01", "2025-07-31", "2025-05-02"],
+                "reportDate": ["2025-06-28", "2025-06-28", "2025-03-29"],
+                "form": ["10-Q", "8-K", "10-Q"],
+                "primaryDocument": ["aapl-20250628.htm", "aapl-8k.htm", "aapl-20250329.htm"],
+            }
+        },
+    }
+
+    def transport(url: str, headers: dict[str, str], timeout: float) -> dict:
+        calls.append(url)
+        assert headers["User-Agent"] == "portfolio-agent contact@example.com"
+        return submissions
+
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=transport,
+    )
+
+    first = client.get_recent_filings("320193", limit=1)
+    second = client.get_recent_filings("0000320193", limit=1)
+
+    assert first == second
+    assert len(first) == 1
+    filing = first[0]
+    assert filing.accession == "0000320193-25-000079"
+    assert filing.form == "10-Q"
+    assert filing.filing_date == "2025-08-01"
+    assert filing.report_date == "2025-06-28"
+    assert filing.submissions_url == "https://data.sec.gov/submissions/CIK0000320193.json"
+    assert filing.primary_document_url == (
+        "https://www.sec.gov/Archives/edgar/data/320193/"
+        "000032019325000079/aapl-20250628.htm"
+    )
+    assert filing.index_url == (
+        "https://www.sec.gov/Archives/edgar/data/320193/"
+        "000032019325000079/0000320193-25-000079-index.html"
+    )
+    assert calls == ["https://data.sec.gov/submissions/CIK0000320193.json"]
+    assert client.cache_metadata["submissions_0000320193"].status == "fresh"
+
+
+def test_primary_filing_document_is_cached_with_accession_provenance(tmp_path: Path):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000320193-25-000079"],
+                "filingDate": ["2025-08-01"],
+                "reportDate": ["2025-06-28"],
+                "form": ["10-Q"],
+                "primaryDocument": ["aapl-20250628.htm"],
+            }
+        },
+    }
+    document_html = "<html><body><h1>Apple 2025 Q3 Form 10-Q</h1></body></html>"
+    text_calls: list[str] = []
+
+    def text_transport(url: str, headers: dict[str, str], timeout: float) -> str:
+        text_calls.append(url)
+        assert headers["User-Agent"] == "portfolio-agent contact@example.com"
+        assert headers["Accept"] == "text/html,application/xhtml+xml"
+        return document_html
+
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=lambda url, headers, timeout: submissions,
+        text_transport=text_transport,
+    )
+    filing = client.get_recent_filings("320193", limit=1)[0]
+
+    first = client.get_filing_document(filing)
+    second = client.get_filing_document(filing)
+
+    assert first == second
+    assert first.filing == filing
+    assert first.text == document_html
+    assert first.source_url == filing.primary_document_url
+    assert text_calls == [filing.primary_document_url]
+    assert client.cache_metadata[
+        "filing_0000320193-25-000079_aapl-20250628.htm"
+    ].status == "fresh"
+
+
+def test_recent_filings_reject_accession_from_a_different_cik(tmp_path: Path):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0001045810-25-000079"],
+                "filingDate": ["2025-08-01"],
+                "reportDate": ["2025-06-28"],
+                "form": ["10-Q"],
+                "primaryDocument": ["aapl-20250628.htm"],
+            }
+        },
+    }
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=lambda url, headers, timeout: submissions,
+    )
+
+    with pytest.raises(SECClientError, match="does not belong to CIK 0000320193"):
+        client.get_recent_filings("320193")
+
+
+def test_recent_filings_reject_unsafe_primary_document_path(tmp_path: Path):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000320193-25-000079"],
+                "filingDate": ["2025-08-01"],
+                "reportDate": ["2025-06-28"],
+                "form": ["10-Q"],
+                "primaryDocument": ["../aapl-20250628.htm"],
+            }
+        },
+    }
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=lambda url, headers, timeout: submissions,
+    )
+
+    with pytest.raises(SECClientError, match="unsafe primary document"):
+        client.get_recent_filings("320193")
+
+
+def test_recent_filings_require_a_positive_limit(tmp_path: Path):
+    calls = 0
+
+    def transport(url: str, headers: dict[str, str], timeout: float) -> dict:
+        nonlocal calls
+        calls += 1
+        return {}
+
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=transport,
+    )
+
+    with pytest.raises(ValueError, match="limit must be at least 1"):
+        client.get_recent_filings("320193", limit=0)
+
+    assert calls == 0
+
+
+def test_recent_filings_reject_submissions_for_a_different_cik(tmp_path: Path):
+    submissions = {
+        "cik": "0001045810",
+        "name": "Wrong issuer",
+        "filings": {"recent": {}},
+    }
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=lambda url, headers, timeout: submissions,
+    )
+
+    with pytest.raises(SECClientError, match="returned CIK 0001045810"):
+        client.get_recent_filings("320193")
+
+
 def test_transient_http_error_is_retried_before_network_success(tmp_path: Path, monkeypatch):
     attempts = 0
     payload = {"cik": 320193, "entityName": "Apple Inc."}

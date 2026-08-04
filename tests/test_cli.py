@@ -72,6 +72,77 @@ def test_cli_reports_sec_failure_when_no_cache_is_available(tmp_path: Path, monk
     assert "no usable cached response" in captured.err
 
 
+def test_cli_filings_fetches_recent_metadata_and_primary_documents(
+    tmp_path: Path, monkeypatch, capsys
+):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000320193-25-000079"],
+                "filingDate": ["2025-08-01"],
+                "reportDate": ["2025-06-28"],
+                "form": ["10-Q"],
+                "primaryDocument": ["aapl-20250628.htm"],
+            }
+        },
+    }
+
+    def json_transport(url: str, headers: dict[str, str], timeout: float) -> dict:
+        if url.endswith("company_tickers.json"):
+            return {
+                "0": {
+                    "cik_str": 320193,
+                    "ticker": "AAPL",
+                    "title": "Apple Inc.",
+                }
+            }
+        return submissions
+
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=json_transport,
+        text_transport=lambda url, headers, timeout: "<html>10-Q body</html>",
+    )
+    monkeypatch.setattr(cli.SECClient, "from_env", lambda: client)
+
+    exit_code = cli.main(["filings", "AAPL", "--limit", "1"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["company"] == {
+        "ticker": "AAPL",
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+    }
+    assert payload["submissions_url"] == (
+        "https://data.sec.gov/submissions/CIK0000320193.json"
+    )
+    assert payload["filings"] == [
+        {
+            "accession": "0000320193-25-000079",
+            "form": "10-Q",
+            "filing_date": "2025-08-01",
+            "report_date": "2025-06-28",
+            "primary_document_url": (
+                "https://www.sec.gov/Archives/edgar/data/320193/"
+                "000032019325000079/aapl-20250628.htm"
+            ),
+            "index_url": (
+                "https://www.sec.gov/Archives/edgar/data/320193/"
+                "000032019325000079/0000320193-25-000079-index.html"
+            ),
+            "document_characters": 22,
+            "cache_status": "network",
+        }
+    ]
+
+
 def test_cli_compare_outputs_normalized_ranked_cited_json(monkeypatch, capsys):
     monkeypatch.setattr(
         cli.SECClient, "from_env", lambda: ComparisonSECClient()
