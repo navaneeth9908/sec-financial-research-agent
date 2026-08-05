@@ -23,6 +23,7 @@ uv run sec-research compare AAPL NVDA --format json --output artifacts/aapl-nvda
 uv run sec-research mart-load AAPL --database .cache/research.duckdb
 uv run sec-research filings AAPL --limit 2
 uv run sec-research filing-chunks AAPL --max-chunks 3
+uv run sec-research filing-search AAPL "supply chain risks" --top-k 3 --mode hybrid
 ```
 
 The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
@@ -73,6 +74,15 @@ index URL. The command prints a compact cited sample plus extraction, section,
 chunk-count, and cache evidence rather than emitting the complete filing text.
 Chunk size, overlap, and sample count are configurable with `--chunk-size`,
 `--overlap-chars`, and `--max-chunks`.
+
+`filing-search` runs deterministic retrieval over all chunks from the latest
+10-K. `lexical` mode uses BM25 term-frequency and document-length scoring;
+`hybrid` mode combines BM25 with query-term coverage, phrase, and canonical SEC
+Item-section signals. Scores, matched terms, chunk IDs, accessions,
+filing dates, source text, primary-document links, and filing-index links are
+returned for every ranked evidence item. Stable chunk-index/ID tie-breaking
+makes repeated queries reproducible, while `--top-k` (also available as
+`--limit`) keeps the cited query demo compact.
 
 ### Cache and failure diagnostics
 

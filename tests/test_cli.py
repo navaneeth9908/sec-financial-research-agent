@@ -231,6 +231,97 @@ def test_cli_filing_chunks_outputs_a_cited_10k_sample(tmp_path: Path, monkeypatc
     )
 
 
+def test_cli_filing_search_returns_ranked_cited_query_evidence(
+    tmp_path: Path, monkeypatch, capsys
+):
+    submissions = {
+        "cik": "0000320193",
+        "name": "Apple Inc.",
+        "filings": {
+            "recent": {
+                "accessionNumber": ["0000320193-25-000079"],
+                "filingDate": ["2025-10-31"],
+                "reportDate": ["2025-09-27"],
+                "form": ["10-K"],
+                "primaryDocument": ["aapl-20250927.htm"],
+            }
+        },
+    }
+
+    def json_transport(url: str, headers: dict[str, str], timeout: float) -> dict:
+        if url.endswith("company_tickers.json"):
+            return {
+                "0": {
+                    "cik_str": 320193,
+                    "ticker": "AAPL",
+                    "title": "Apple Inc.",
+                }
+            }
+        return submissions
+
+    filing_html = """
+    <html><body>
+      <h2>Item 1. Business</h2>
+      <p>A global supply chain supports product manufacturing and distribution.</p>
+      <h2>Item 1A. Risk Factors</h2>
+      <p>Component shortages and supply chain disruptions could delay production.</p>
+      <h2>Item 7A. Market Risk</h2>
+      <p>Interest-rate changes can affect the fair value of investments.</p>
+    </body></html>
+    """
+    client = SECClient(
+        user_agent="portfolio-agent contact@example.com",
+        cache_dir=tmp_path,
+        throttle_seconds=0,
+        transport=json_transport,
+        text_transport=lambda url, headers, timeout: filing_html,
+    )
+    monkeypatch.setattr(cli.SECClient, "from_env", lambda: client)
+
+    exit_code = cli.main(
+        [
+            "filing-search",
+            "AAPL",
+            "supply chain disruptions",
+            "--limit",
+            "2",
+            "--chunk-size",
+            "200",
+            "--overlap-chars",
+            "20",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["query"] == "supply chain disruptions"
+    assert payload["retrieval"]["mode"] == "hybrid"
+    assert payload["retrieval"]["candidate_chunks"] == 3
+    assert payload["retrieval"]["returned_evidence"] == 2
+    assert [hit["rank"] for hit in payload["evidence"]] == [1, 2]
+    assert [hit["section"] for hit in payload["evidence"]] == [
+        "Item 1A — Risk Factors",
+        "Item 1 — Business",
+    ]
+    assert payload["evidence"][0]["matched_terms"] == [
+        "chain",
+        "disruptions",
+        "supply",
+    ]
+    assert all(hit["score"] > 0 for hit in payload["evidence"])
+    assert all(
+        hit["accession"] == "0000320193-25-000079"
+        for hit in payload["evidence"]
+    )
+    assert all(
+        hit["source_url"] == payload["filing"]["primary_document_url"]
+        for hit in payload["evidence"]
+    )
+    assert all(hit["index_url"] == payload["filing"]["index_url"] for hit in payload["evidence"])
+
+
 def test_cli_compare_outputs_normalized_ranked_cited_json(monkeypatch, capsys):
     monkeypatch.setattr(
         cli.SECClient, "from_env", lambda: ComparisonSECClient()

@@ -30,11 +30,13 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 5. Filing ingestion reads the issuer's SEC submissions feed, validates CIK/accession/document-path provenance, and caches selected 10-K/10-Q primary documents.
 6. The filing parser removes hidden inline-XBRL/non-content markup, detects canonical 10-K Item headings, and creates bounded overlapping chunks without crossing section boundaries.
 7. Each filing chunk retains deterministic ID/index fields plus CIK, accession, form, filing/report dates, section, primary-document URL, and filing-index URL for downstream citation guards.
-8. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
-9. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
-10. The analytics layer calculates ratios from source values.
-11. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
-12. The renderer emits Markdown/JSON with filing and endpoint citations.
+8. Filing retrieval applies deterministic BM25 body scoring; hybrid mode adds query-term coverage, phrase, and canonical SEC Item-section signals, then resolves score ties by chunk index/ID.
+9. Ranked evidence retains matched terms, source text, accession, filing/report dates, primary-document URL, and filing-index URL for transparent query citations.
+10. The normalization layer merges ordered XBRL aliases by fiscal period and deduplicates repeated comparative 10-K facts.
+11. Snapshot construction requires exact fiscal-end alignment for every metric and a consecutive annual revenue period for growth.
+12. The analytics layer calculates ratios from source values.
+13. The DuckDB adapter quality-checks and atomically upserts normalized facts and ratios with SEC lineage.
+14. The renderer emits Markdown/JSON with filing and endpoint citations.
 
 ## Reliability rules
 
@@ -54,5 +56,6 @@ The initial vertical slice uses the same boundaries without prematurely adding h
 
 - The LLM never performs authoritative arithmetic; tools return calculated values.
 - Filing answers must cite retrieved chunks and accession numbers.
+- Retrieval scores and matched terms remain visible so downstream answer grounding can be audited without treating rank as factual evidence.
 - Unsupported questions return an explicit limitation instead of invented facts.
 - Golden evaluations check numeric accuracy, citation presence, and retrieval grounding.

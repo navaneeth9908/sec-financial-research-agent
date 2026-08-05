@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from sec_financial_research.ai.retrieval import HybridFilingRetriever
 from sec_financial_research.application.research_service import FinancialResearchService
 from sec_financial_research.domain.models import FilingChunk
 from sec_financial_research.infrastructure.filing_parser import (
@@ -100,6 +101,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Approximate whole-word overlap between chunks (default: 200)",
     )
 
+    filing_search = subparsers.add_parser(
+        "filing-search",
+        help="Query the latest 10-K and return ranked evidence with SEC citations",
+    )
+    filing_search.add_argument(
+        "ticker", help="Public-company ticker, for example AAPL or MSFT"
+    )
+    filing_search.add_argument("query", help="Question or evidence search query")
+    filing_search.add_argument(
+        "--top-k",
+        "--limit",
+        dest="top_k",
+        type=int,
+        default=3,
+        help="Maximum ranked evidence chunks to print (default: 3)",
+    )
+    filing_search.add_argument(
+        "--mode",
+        choices=("lexical", "hybrid"),
+        default="hybrid",
+        help="BM25 lexical or section-aware hybrid ranking (default: hybrid)",
+    )
+    filing_search.add_argument(
+        "--chunk-size",
+        type=int,
+        default=1_800,
+        help="Maximum characters per chunk (default: 1800)",
+    )
+    filing_search.add_argument(
+        "--overlap-chars",
+        type=int,
+        default=200,
+        help="Approximate whole-word overlap between chunks (default: 200)",
+    )
+
     mart_load = subparsers.add_parser(
         "mart-load",
         help="Ingest a company snapshot into the DuckDB analytical mart",
@@ -167,8 +203,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client = SECClient.from_env()
         service = FinancialResearchService(client)
-        if args.command == "filing-chunks":
-            if args.max_chunks < 1:
+        if args.command in {"filing-chunks", "filing-search"}:
+            if args.command == "filing-chunks" and args.max_chunks < 1:
                 raise ValueError("max-chunks must be at least 1")
             identity = client.resolve_ticker(args.ticker)
             filings = client.get_recent_filings(
@@ -187,42 +223,91 @@ def main(argv: list[str] | None = None) -> int:
                 overlap_chars=args.overlap_chars,
             )
             cache_key = f"filing_{filing.accession}_{filing.primary_document}"
-            result = {
-                "company": {
-                    "ticker": identity.ticker,
-                    "cik": identity.cik,
-                    "name": identity.name,
-                },
-                "filing": {
-                    "accession": filing.accession,
-                    "form": filing.form,
-                    "filing_date": filing.filing_date,
-                    "report_date": filing.report_date,
-                    "primary_document_url": filing.primary_document_url,
-                    "index_url": filing.index_url,
-                    "cache_status": client.cache_metadata[cache_key].status,
-                },
-                "extraction": {
-                    "document_characters": len(document.text),
-                    "extracted_characters": len(extracted_text),
-                    "chunk_count": len(chunks),
-                    "sections": list(dict.fromkeys(chunk.section for chunk in chunks)),
-                },
-                "sample_chunks": [
-                    {
-                        "chunk_id": chunk.chunk_id,
-                        "chunk_index": chunk.chunk_index,
-                        "section": chunk.section,
-                        "text": chunk.text,
-                        "accession": chunk.accession,
-                        "source_url": chunk.source_url,
-                        "index_url": chunk.index_url,
-                    }
-                    for chunk in _representative_filing_chunks(
-                        chunks, args.max_chunks
-                    )
-                ],
+            company_payload = {
+                "ticker": identity.ticker,
+                "cik": identity.cik,
+                "name": identity.name,
             }
+            filing_payload = {
+                "accession": filing.accession,
+                "form": filing.form,
+                "filing_date": filing.filing_date,
+                "report_date": filing.report_date,
+                "primary_document_url": filing.primary_document_url,
+                "index_url": filing.index_url,
+                "cache_status": client.cache_metadata[cache_key].status,
+            }
+            if args.command == "filing-search":
+                evidence = HybridFilingRetriever(chunks).search(
+                    args.query,
+                    limit=args.top_k,
+                    mode=args.mode,
+                )
+                result = {
+                    "query": args.query,
+                    "mode": args.mode,
+                    "company": company_payload,
+                    "filing": filing_payload,
+                    "retrieval": {
+                        "mode": args.mode,
+                        "candidate_chunks": len(chunks),
+                        "returned_evidence": len(evidence),
+                        "chunk_count": len(chunks),
+                        "evidence_count": len(evidence),
+                    },
+                    "evidence": [
+                        {
+                            "rank": match.rank,
+                            "score": match.score,
+                            "lexical_score": match.lexical_score,
+                            "matched_terms": list(match.matched_terms),
+                            "chunk_id": match.chunk.chunk_id,
+                            "chunk_index": match.chunk.chunk_index,
+                            "cik": match.chunk.cik,
+                            "company_name": match.chunk.company_name,
+                            "accession": match.chunk.accession,
+                            "form": match.chunk.form,
+                            "filing_date": match.chunk.filing_date,
+                            "report_date": match.chunk.report_date,
+                            "section": match.chunk.section,
+                            "text": match.chunk.text,
+                            "source_url": match.chunk.source_url,
+                            "index_url": match.chunk.index_url,
+                            "citations": {
+                                "primary_document_url": match.chunk.source_url,
+                                "filing_index_url": match.chunk.index_url,
+                            },
+                        }
+                        for match in evidence
+                    ],
+                }
+            else:
+                result = {
+                    "company": company_payload,
+                    "filing": filing_payload,
+                    "extraction": {
+                        "document_characters": len(document.text),
+                        "extracted_characters": len(extracted_text),
+                        "chunk_count": len(chunks),
+                        "sections": list(
+                            dict.fromkeys(chunk.section for chunk in chunks)
+                        ),
+                    },
+                    "sample_chunks": [
+                        {
+                            "chunk_id": chunk.chunk_id,
+                            "chunk_index": chunk.chunk_index,
+                            "section": chunk.section,
+                            "text": chunk.text,
+                            "accession": chunk.accession,
+                            "source_url": chunk.source_url,
+                            "index_url": chunk.index_url,
+                        }
+                        for chunk in _representative_filing_chunks(
+                            chunks, args.max_chunks
+                        )
+                    ],
+                }
         elif args.command == "filings":
             identity = client.resolve_ticker(args.ticker)
             forms = tuple(args.forms) if args.forms else ("10-K", "10-Q")
@@ -271,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _warn_on_stale_cache(client)
 
-    if args.command in {"filings", "filing-chunks"}:
+    if args.command in {"filings", "filing-chunks", "filing-search"}:
         print(json.dumps(result, indent=2))
         return 0
 
