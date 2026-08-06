@@ -24,6 +24,8 @@ uv run sec-research mart-load AAPL --database .cache/research.duckdb
 uv run sec-research filings AAPL --limit 2
 uv run sec-research filing-chunks AAPL --max-chunks 3
 uv run sec-research filing-search AAPL "supply chain risks" --top-k 3 --mode hybrid
+uv run sec-research ask AAPL "How did revenue grow and what supply chain risks were disclosed?"
+uv run sec-research evaluate
 ```
 
 The `report` command resolves a ticker, fetches/cache-controls SEC Companyfacts, extracts comparable annual facts, computes research ratios, and prints a report with links to the SEC source and filing. `compare` accepts two or more distinct tickers, normalizes reported USD metrics to billions, ranks every calculated percentage from highest to lowest, and retains Companyfacts and filing citations for each issuer. Fiscal period ends remain visible, and the ranking is descriptive rather than an investment rating. A committed single-company example is available at [`examples/sample-aapl-report.md`](examples/sample-aapl-report.md).
@@ -83,6 +85,24 @@ filing dates, source text, primary-document links, and filing-index links are
 returned for every ranked evidence item. Stable chunk-index/ID tie-breaking
 makes repeated queries reproducible, while `--top-k` (also available as
 `--limit`) keeps the cited query demo compact.
+
+### Question agent and golden evaluation
+
+`ask` uses a deterministic planner with typed financial-analytics and filing-
+retrieval tools. Financial answers retain calculated SEC Companyfacts metrics and
+citations; filing answers retain ranked passages, accessions, primary-document
+URLs, and filing-index URLs. Investment recommendations, forecasts, and questions
+outside SEC financial and filing research return an explicit unsupported result
+without tool evidence.
+
+`evaluate` runs the versioned [`evals/golden_questions.json`](evals/golden_questions.json)
+dataset through that same agent path. The dataset is marked
+`deterministic_fixture`, uses committed SEC-derived Companyfacts and filing
+excerpts, and applies explicit numeric tolerances rather than an LLM judge. The
+verified command result is **6/6 golden cases passed**: numeric accuracy 2/2,
+tool-output contracts 6/6, citation presence 3/3, retrieval relevance 2/2,
+groundedness 3/3, and unsupported questions 3/3. These are observed pass counts,
+not a fabricated quality score.
 
 ### Cache and failure diagnostics
 

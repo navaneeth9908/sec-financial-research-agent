@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "name": "sec-research-agent-golden-v1",
+  "description": "Deterministic Apple fixture cases for financial arithmetic, tool routing, citations, retrieval, grounding, and unsupported questions.",
+  "data_mode": "deterministic_fixture",
+  "score_policy": "The runner reports only pass counts calculated from these expectations; it does not use an LLM judge or fabricate scores.",
+  "fixture": {
+    "content_origin": "SEC-derived deterministic fixtures; see fixture files and README provenance notes.",
+    "company": {
+      "ticker": "AAPL",
+      "cik": "0000320193",
+      "name": "Apple Inc."
+    },
+    "companyfacts_path": "../tests/fixtures/apple_companyfacts_min.json",
+    "filing": {
+      "accession": "0000320193-25-000079",
+      "filing_date": "2025-10-31",
+      "report_date": "2025-09-27",
+      "form": "10-K",
+      "primary_document": "aapl-20250927.htm",
+      "html_path": "fixtures/apple_2025_10k_excerpt.html"
+    },
+    "chunk_size": 1200,
+    "overlap_chars": 100
+  },
+  "cases": [
+    {
+      "id": "financial-performance",
+      "ticker": "AAPL",
+      "question": "What were revenue growth and net margin?",
+      "expected": {
+        "status": "supported",
+        "route": "financial",
+        "tools": ["financial_analytics"],
+        "ratios": {
+          "revenue_growth_pct": {
+            "value": 6.425511782832739,
+            "absolute_tolerance": 1e-09
+          },
+          "net_margin_pct": {
+            "value": 26.91506412181824,
+            "absolute_tolerance": 1e-09
+          },
+          "liabilities_to_assets_pct": {
+            "value": 79.47533828265705,
+            "absolute_tolerance": 1e-09
+          },
+          "cash_conversion_pct": {
+            "value": 99.5286135166503,
+            "absolute_tolerance": 1e-09
+          }
+        },
+        "citation_sources": ["companyfacts"],
+        "evidence_requirements": [
+          "calculated_financials",
+          "companyfacts_citation"
+        ]
+      }
+    },
+    {
+      "id": "filing-global-supply-chain-risk",
+      "ticker": "AAPL",
+      "question": "What global supply chain risks affect operations?",
+      "expected": {
+        "status": "supported",
+        "route": "filing",
+        "tools": ["filing_retrieval"],
+        "citation_sources": ["filing", "filing_index"],
+        "evidence_requirements": ["filing_chunk_citation"],
+        "retrieval": {
+          "top_section": "Item 1A — Risk Factors",
+          "required_terms": ["global", "supply", "chain", "operations"]
+        },
+        "grounded_terms": ["global", "supply", "chain", "operations"]
+      }
+    },
+    {
+      "id": "combined-growth-and-supply-chain",
+      "ticker": "AAPL",
+      "question": "How did revenue grow and what global supply chain risks affect operations?",
+      "expected": {
+        "status": "supported",
+        "route": "combined",
+        "tools": ["financial_analytics", "filing_retrieval"],
+        "ratios": {
+          "revenue_growth_pct": {
+            "value": 6.425511782832739,
+            "absolute_tolerance": 1e-09
+          }
+        },
+        "citation_sources": ["companyfacts", "filing", "filing_index"],
+        "evidence_requirements": [
+          "calculated_financials",
+          "companyfacts_citation",
+          "filing_chunk_citation"
+        ],
+        "retrieval": {
+          "top_section": "Item 1A — Risk Factors",
+          "required_terms": ["global", "supply", "chain", "operations"]
+        },
+        "grounded_terms": ["global", "supply", "chain", "operations"]
+      }
+    },
+    {
+      "id": "unsupported-investment-advice",
+      "ticker": "AAPL",
+      "question": "Should I buy this stock?",
+      "expected": {
+        "status": "unsupported",
+        "route": "unsupported",
+        "tools": [],
+        "limitation_terms": ["investment recommendations", "outside"]
+      }
+    },
+    {
+      "id": "unsupported-forecast",
+      "ticker": "AAPL",
+      "question": "Forecast next year's revenue growth.",
+      "expected": {
+        "status": "unsupported",
+        "route": "unsupported",
+        "tools": [],
+        "limitation_terms": ["forecasts", "outside"]
+      }
+    },
+    {
+      "id": "unsupported-general-knowledge",
+      "ticker": "AAPL",
+      "question": "Who won the football match yesterday?",
+      "expected": {
+        "status": "unsupported",
+        "route": "unsupported",
+        "tools": [],
+        "limitation_terms": ["outside", "SEC financial and filing research scope"]
+      }
+    }
+  ]
+}

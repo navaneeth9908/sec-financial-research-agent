@@ -8,8 +8,17 @@ import sys
 from pathlib import Path
 
 from sec_financial_research.ai.retrieval import HybridFilingRetriever
+from sec_financial_research.ai.tools import FilingRetrievalTool, FinancialAnalyticsTool
+from sec_financial_research.application.question_agent import (
+    ResearchAgent,
+    ResearchAnswer,
+)
 from sec_financial_research.application.research_service import FinancialResearchService
 from sec_financial_research.domain.models import FilingChunk
+from sec_financial_research.evaluation import (
+    format_evaluation_report,
+    run_evaluation_file,
+)
 from sec_financial_research.infrastructure.filing_parser import (
     chunk_filing_document,
     extract_filing_text,
@@ -53,6 +62,30 @@ def build_parser() -> argparse.ArgumentParser:
         dest="output_format",
     )
     compare.add_argument("--output", type=Path, help="Optional output file")
+
+    ask = subparsers.add_parser(
+        "ask",
+        help="Route a question through deterministic financial and filing tools",
+    )
+    ask.add_argument("ticker", help="Public-company ticker, for example AAPL or MSFT")
+    ask.add_argument("question", help="Financial or filing research question")
+    ask.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="Maximum cited filing passages for retrieval steps (default: 3)",
+    )
+
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Run deterministic golden questions and evidence checks",
+    )
+    evaluate.add_argument(
+        "--dataset",
+        type=Path,
+        default=Path("evals/golden_questions.json"),
+        help="Golden evaluation JSON (default: evals/golden_questions.json)",
+    )
 
     filings = subparsers.add_parser(
         "filings",
@@ -198,12 +231,87 @@ def _representative_filing_chunks(
     return tuple(selected)
 
 
+def _research_answer_to_dict(answer: ResearchAnswer) -> dict:
+    financial = (
+        report_to_dict(answer.financial.report)
+        if answer.financial is not None
+        else None
+    )
+    filing = (
+        [
+            {
+                "rank": match.rank,
+                "score": match.score,
+                "lexical_score": match.lexical_score,
+                "matched_terms": list(match.matched_terms),
+                "chunk_id": match.chunk.chunk_id,
+                "section": match.chunk.section,
+                "text": match.chunk.text,
+                "accession": match.chunk.accession,
+                "filing_date": match.chunk.filing_date,
+                "report_date": match.chunk.report_date,
+                "source_url": match.chunk.source_url,
+                "index_url": match.chunk.index_url,
+            }
+            for match in answer.filing.matches
+        ]
+        if answer.filing is not None
+        else []
+    )
+    return {
+        "question": answer.question,
+        "ticker": answer.ticker,
+        "status": answer.status.value,
+        "plan": {
+            "route": answer.plan.route.value,
+            "tool_calls": [
+                {"tool": call.tool.value, "objective": call.objective}
+                for call in answer.plan.tool_calls
+            ],
+        },
+        "evidence_gate": {
+            "required": [
+                requirement.value
+                for requirement in answer.plan.evidence_requirements
+            ],
+            "satisfied": [
+                requirement.value for requirement in answer.satisfied_evidence
+            ],
+        },
+        "evidence": {
+            "financial": financial,
+            "filing": filing,
+        },
+        "limitation": answer.limitation,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "evaluate":
+        try:
+            evaluation_report = run_evaluation_file(args.dataset)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"error: evaluation failed: {exc}", file=sys.stderr)
+            return 1
+        print(format_evaluation_report(evaluation_report))
+        return 0 if evaluation_report.passed else 1
+
     try:
         client = SECClient.from_env()
         service = FinancialResearchService(client)
-        if args.command in {"filing-chunks", "filing-search"}:
+        if args.command == "ask":
+            agent = ResearchAgent(
+                financial_tool=FinancialAnalyticsTool(service),
+                filing_tool=FilingRetrievalTool(client),
+            )
+            answer = agent.answer(
+                args.ticker,
+                args.question,
+                filing_limit=args.top_k,
+            )
+            result = _research_answer_to_dict(answer)
+        elif args.command in {"filing-chunks", "filing-search"}:
             if args.command == "filing-chunks" and args.max_chunks < 1:
                 raise ValueError("max-chunks must be at least 1")
             identity = client.resolve_ticker(args.ticker)
@@ -356,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _warn_on_stale_cache(client)
 
-    if args.command in {"filings", "filing-chunks", "filing-search"}:
+    if args.command in {"ask", "filings", "filing-chunks", "filing-search"}:
         print(json.dumps(result, indent=2))
         return 0
 

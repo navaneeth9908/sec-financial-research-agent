@@ -29,6 +29,8 @@ Goal: complete a recruiter-ready SEC Financial Research Agent in one week throug
 - Add typed research tools and a question router/planner.
 - Add golden questions, retrieval/grounding checks, and deterministic financial-answer evals.
 
+**Status:** complete — typed financial and filing tools now run through a deterministic question planner with explicit evidence gates and unsupported-question handling. A versioned six-case deterministic fixture suite measures numeric accuracy, tool contracts, SEC citation presence, retrieval relevance, groundedness, and unsupported behavior; the documented CLI run passes all six cases without an LLM judge or fabricated scores.
+
 ## Day 5 — Production API
 
 - Add FastAPI endpoints for company reports, comparisons, and filing questions.
